@@ -9,12 +9,14 @@
   <link rel="canonical" href="https://tadiwamakele-0712.github.io/link-tube-store/">
   <link rel="icon" href="images/logo.jpg" type="image/jpeg">
   <link rel="apple-touch-icon" href="images/logo.jpg">
+  <link rel="preload" href="images/logo.jpg" as="image" fetchpriority="high">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <div class="bg-layer" aria-hidden="true">
-    <img src="images/486109798_4634391263367754_6505852287383073150_n.jpg" alt="" class="bg-photo">
+    <img src="images/bg-mobile.jpg" alt="" class="bg-photo bg-photo-mobile" width="800" height="600" decoding="async" fetchpriority="low">
+    <img src="images/486109798_4634391263367754_6505852287383073150_n.jpg" alt="" class="bg-photo bg-photo-desktop" width="1200" height="900" decoding="async" fetchpriority="low" loading="lazy">
     <div class="bg-shade"></div>
   </div>
 
@@ -97,6 +99,9 @@
       </div>
 
       <div id="track-list" class="track-list" role="list"></div>
+      <div id="load-more-wrap" class="load-more-wrap" hidden>
+        <button type="button" id="load-more" class="btn btn-load-more">Load more</button>
+      </div>
       <p id="no-results" class="no-results" hidden>No videos found — try another search.</p>
     </section>
 
@@ -130,7 +135,7 @@
     </section>
 
     <footer class="footer">
-      <img src="images/logo.jpg" alt="" class="footer-logo" width="40" height="40">
+      <div class="footer-logo" aria-hidden="true"></div>
       <p class="footer-name">Joker Di Genius</p>
       <p class="footer-copy">© 2026 · Watch &amp; subscribe on YouTube</p>
     </footer>

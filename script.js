@@ -1,4 +1,4 @@
-import { loadVideos, VIDEO_TYPES } from "./youtube.js";
+import { loadVideos, VIDEO_TYPES, thumbUrl, isSaveDataMode } from "./data.js";
 
 const listEl = document.getElementById("track-list");
 const filtersEl = document.getElementById("filters");
@@ -6,6 +6,8 @@ const searchEl = document.getElementById("search");
 const noResultsEl = document.getElementById("no-results");
 const countLabelEl = document.getElementById("track-count-label");
 const loadingEl = document.getElementById("loading");
+const loadMoreWrap = document.getElementById("load-more-wrap");
+const loadMoreBtn = document.getElementById("load-more");
 const playerModal = document.getElementById("player-modal");
 const playerFrame = document.getElementById("player-frame");
 const playerTitle = document.getElementById("player-title");
@@ -14,9 +16,15 @@ const playerClose = document.getElementById("player-close");
 const menuLinks = [...document.querySelectorAll(".menu-link")];
 const sectionIds = ["about", "music", "contact"];
 
+const saveData = isSaveDataMode();
+const PAGE_SIZE = saveData ? 8 : 12;
+const THUMB_QUALITY = saveData ? "default" : "mqdefault";
+
 let videos = [];
 let activeFilter = "all";
 let query = "";
+let visibleCount = PAGE_SIZE;
+let thumbObserver = null;
 
 function typeLabel(id) {
   return VIDEO_TYPES.find((t) => t.id === id)?.label ?? id;
@@ -40,6 +48,7 @@ function renderFilters() {
   filtersEl.querySelectorAll(".filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       activeFilter = btn.dataset.filter;
+      visibleCount = PAGE_SIZE;
       renderFilters();
       renderVideos();
     });
@@ -63,9 +72,14 @@ function filteredVideos() {
 }
 
 function openPlayer(video) {
+  if (saveData) {
+    window.open(video.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
   playerTitle.textContent = video.title;
   playerOpen.href = video.url;
-  playerFrame.src = `https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0`;
+  playerFrame.src = `https://www.youtube-nocookie.com/embed/${video.id}?rel=0`;
   playerModal.showModal();
 }
 
@@ -109,36 +123,51 @@ function setupMenuHighlight() {
   setActiveMenuLink(sections[0].id);
 }
 
-function renderVideos() {
-  const items = filteredVideos();
-  countLabelEl.textContent = `${items.length} from YouTube — tap to watch`;
+function setupThumbObserver() {
+  if (thumbObserver) thumbObserver.disconnect();
 
-  if (!items.length) {
-    listEl.innerHTML = "";
-    noResultsEl.hidden = false;
-    return;
-  }
+  thumbObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        const src = img.dataset.src;
+        if (src) {
+          img.src = src;
+          img.removeAttribute("data-src");
+        }
+        observer.unobserve(img);
+      });
+    },
+    { rootMargin: "120px 0px", threshold: 0.01 }
+  );
+}
 
-  noResultsEl.hidden = true;
-  listEl.innerHTML = items
-    .map(
-      (video) => `
+function observeThumbs() {
+  listEl.querySelectorAll("img[data-src]").forEach((img) => {
+    thumbObserver.observe(img);
+  });
+}
+
+function videoCardHtml(video) {
+  const meta = [video.views, video.published].filter(Boolean).join(" · ");
+  return `
     <button type="button" class="video-card" data-id="${video.id}" role="listitem">
       <span class="video-thumb-wrap">
-        <img src="${video.thumbnail}" alt="" class="video-thumb" loading="lazy" width="120" height="68">
+        <img data-src="${thumbUrl(video.id, THUMB_QUALITY)}" alt="" class="video-thumb" width="120" height="68" decoding="async">
         <span class="video-play-badge" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
         </span>
       </span>
       <span class="video-info">
         <span class="video-title">${video.title}</span>
-        <span class="video-meta">${[video.views, video.published].filter(Boolean).join(" · ") || formatDate(video.published)} · ${typeLabel(video.type)}</span>
+        <span class="video-meta">${meta || formatDate(video.published)} · ${typeLabel(video.type)}</span>
       </span>
       <span class="video-tag">${typeLabel(video.type)}</span>
-    </button>`
-    )
-    .join("");
+    </button>`;
+}
 
+function bindVideoCards() {
   listEl.querySelectorAll(".video-card").forEach((card) => {
     card.addEventListener("click", () => {
       const video = videos.find((v) => v.id === card.dataset.id);
@@ -147,9 +176,53 @@ function renderVideos() {
   });
 }
 
+function updateLoadMore(items) {
+  const hasMore = visibleCount < items.length;
+  loadMoreWrap.hidden = !hasMore;
+  if (hasMore) {
+    loadMoreBtn.textContent = `Load more (${items.length - visibleCount} left)`;
+  }
+}
+
+function renderVideos() {
+  const items = filteredVideos();
+  countLabelEl.textContent = saveData
+    ? `${items.length} videos — smaller images, opens on YouTube`
+    : `${items.length} from YouTube — tap to watch`;
+
+  if (!items.length) {
+    listEl.innerHTML = "";
+    loadMoreWrap.hidden = true;
+    noResultsEl.hidden = false;
+    return;
+  }
+
+  noResultsEl.hidden = true;
+  const slice = items.slice(0, visibleCount);
+  listEl.innerHTML = slice.map((video) => videoCardHtml(video)).join("");
+  bindVideoCards();
+  observeThumbs();
+  updateLoadMore(items);
+}
+
 searchEl.addEventListener("input", () => {
   query = searchEl.value;
+  visibleCount = PAGE_SIZE;
   renderVideos();
+});
+
+loadMoreBtn.addEventListener("click", () => {
+  const items = filteredVideos();
+  const previousCount = visibleCount;
+  visibleCount = Math.min(visibleCount + PAGE_SIZE, items.length);
+  const nextItems = items.slice(previousCount, visibleCount);
+  listEl.insertAdjacentHTML(
+    "beforeend",
+    nextItems.map((video) => videoCardHtml(video)).join("")
+  );
+  bindVideoCards();
+  observeThumbs();
+  updateLoadMore(items);
 });
 
 playerClose.addEventListener("click", closePlayer);
@@ -161,6 +234,7 @@ playerModal.addEventListener("cancel", () => {
 });
 
 async function init() {
+  setupThumbObserver();
   renderFilters();
   setupMenuHighlight();
   try {
@@ -170,7 +244,9 @@ async function init() {
     const channelNote = data.channelCount
       ? ` · ${data.channelCount} on channel`
       : "";
-    countLabelEl.textContent = `${videos.length} videos from YouTube${channelNote}`;
+    countLabelEl.textContent = saveData
+      ? `${videos.length} videos${channelNote} — data saver on`
+      : `${videos.length} videos from YouTube${channelNote}`;
     renderVideos();
   } catch {
     loadingEl.textContent = "Could not load YouTube videos. Please try again later.";
