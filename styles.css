@@ -620,6 +620,13 @@ body {
   margin-top: 0.15rem;
 }
 
+.footer-credit {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  opacity: 0.85;
+}
+
 @media (min-width: 480px) {
   .social-pill span:last-child { display: inline; }
 }
